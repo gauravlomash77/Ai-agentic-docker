@@ -17,7 +17,7 @@ from typing import Dict, List
 
 def _has_main_guard(file_path: Path) -> bool:
     """
-    Detects if file has:
+    Detects if file contains:
         if __name__ == "__main__":
     """
     try:
@@ -36,43 +36,35 @@ def _has_main_guard(file_path: Path) -> bool:
     return False
 
 
-def _detect_app_object(file_path: Path) -> List[str]:
+def _detect_app_object(file_path: Path) -> bool:
     """
-    Detects ASGI / WSGI app objects.
+    Detects ASGI / WSGI app object.
     Example:
         app = FastAPI()
         app = Flask(__name__)
     """
-    app_names = []
-
     try:
         tree = ast.parse(file_path.read_text())
     except Exception:
-        return app_names
+        return False
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name):
-                    if target.id.lower() == "app":
-                        app_names.append(target.id)
-
-    return app_names
+                if isinstance(target, ast.Name) and target.id == "app":
+                    return True
+    return False
 
 
 def resolve_entrypoint(
     repo_path: Path,
     scan_data: Dict[str, object],
     framework_data: Dict[str, object],
+    stack_data: Dict[str, object],
 ) -> Dict[str, object]:
     """
     Resolve execution model and entrypoint.
-
-    Returns:
-        Dict[str, object]: Entrypoint resolution
     """
-    files: List[str] = scan_data.get("files", [])
-
     result = {
         "type": None,          # script | asgi_service | wsgi_service
         "command": None,
@@ -80,32 +72,37 @@ def resolve_entrypoint(
         "notes": [],
     }
 
-    python_files = [f for f in files if f.endswith(".py")]
+    # ONLY user-level entrypoint candidates (never agent internals)
+    entrypoint_candidates: List[str] = stack_data.get("entrypoint_candidates", [])
 
-    # 1. Script detection
-    for file in python_files:
+    # 1. Script detection (STRICT)
+    for file in entrypoint_candidates:
         path = repo_path / file
-        if _has_main_guard(path):
+        if path.exists() and _has_main_guard(path):
             result["type"] = "script"
             result["command"] = ["python", file]
             result["confidence"] = "high"
             return result
 
-    # 2. Service detection (framework must exist)
+    # 2. Service detection
     framework = framework_data.get("framework")
     interface = framework_data.get("interface")
 
     if framework and interface:
-        for file in python_files:
+        for file in entrypoint_candidates:
             path = repo_path / file
-            apps = _detect_app_object(path)
-            if apps:
+            if path.exists() and _detect_app_object(path):
                 module_path = file.replace("/", ".").replace(".py", "")
                 app_ref = f"{module_path}:app"
 
                 if interface == "ASGI":
                     result["type"] = "asgi_service"
-                    result["command"] = ["uvicorn", app_ref, "--host", "0.0.0.0"]
+                    result["command"] = [
+                        "uvicorn",
+                        app_ref,
+                        "--host",
+                        "0.0.0.0",
+                    ]
                 else:
                     result["type"] = "wsgi_service"
                     result["command"] = ["gunicorn", app_ref]

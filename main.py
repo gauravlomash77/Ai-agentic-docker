@@ -15,8 +15,9 @@ import sys
 import json
 from pathlib import Path
 from typing import NoReturn
-from agent.analyzer.stack_detector import detect_python_stack
+
 from agent.scanner.repo_scanner import scan_repository
+from agent.analyzer.stack_detector import detect_python_stack
 from agent.analyzer.framework_detector import detect_framework
 from agent.analyzer.entrypoint_resolver import resolve_entrypoint
 
@@ -24,24 +25,16 @@ from agent.analyzer.entrypoint_resolver import resolve_entrypoint
 def parse_args() -> argparse.Namespace:
     """
     Parse CLI arguments.
-
-    Returns:
-        argparse.Namespace: Parsed arguments
     """
-    parser = argparse.ArgumentParser(
-        description="Senior-grade Dockerization Agent"
-    )
+    parser = argparse.ArgumentParser(description="Senior-grade Dockerization Agent")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     analyze_parser = subparsers.add_parser(
-        "analyze",
-        help="Analyze a backend repository and detect stack details"
+        "analyze", help="Analyze a backend repository and detect stack details"
     )
     analyze_parser.add_argument(
-        "repo_path",
-        type=str,
-        help="Absolute or relative path to backend repository"
+        "repo_path", type=str, help="Absolute or relative path to backend repository"
     )
 
     return parser.parse_args()
@@ -50,15 +43,6 @@ def parse_args() -> argparse.Namespace:
 def validate_repo_path(repo_path: str) -> Path:
     """
     Validate repository path.
-
-    Args:
-        repo_path (str): Path provided by user
-
-    Returns:
-        Path: Validated Path object
-
-    Raises:
-        SystemExit: If path is invalid
     """
     path = Path(repo_path).resolve()
 
@@ -72,7 +56,11 @@ def validate_repo_path(repo_path: str) -> Path:
 
     return path
 
+
 def run_analysis(repo_path: Path) -> NoReturn:
+    """
+    Run full repository analysis.
+    """
     print("[INFO] Dockerization Agent initialized")
     print(f"[INFO] Analyzing repository: {repo_path}")
 
@@ -93,20 +81,24 @@ def run_analysis(repo_path: Path) -> NoReturn:
         repo_path=repo_path,
         scan_data=scan_data,
         framework_data=framework_analysis,
+        stack_data=stack_analysis,
     )
     print("[INFO] Entrypoint resolution completed")
 
-    print(json.dumps(
-        {
-            "repository": scan_data,
-            "python_stack": stack_analysis,
-            "framework": framework_analysis,
-            "entrypoint": entrypoint,
-        },
-        indent=2
-    ))
+    print(
+        json.dumps(
+            {
+                "repository": scan_data,
+                "python_stack": stack_analysis,
+                "framework": framework_analysis,
+                "entrypoint": entrypoint,
+            },
+            indent=2,
+        )
+    )
 
     sys.exit(0)
+
 
 def main() -> NoReturn:
     """
