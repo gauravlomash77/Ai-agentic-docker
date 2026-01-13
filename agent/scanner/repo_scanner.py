@@ -12,13 +12,14 @@ from typing import Dict, List, Set
 
 
 IGNORED_DIRS: Set[str] = {
-    ".git",
+     ".git",
     "__pycache__",
     ".venv",
     "venv",
     "node_modules",
     ".idea",
     ".vscode",
+    ".ruff_cache",
 }
 
 
