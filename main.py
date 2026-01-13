@@ -12,8 +12,11 @@ Phase-1:
 
 import argparse
 import sys
+import json
 from pathlib import Path
 from typing import NoReturn
+from agent.analyzer.stack_detector import detect_python_stack
+from agent.scanner.repo_scanner import scan_repository
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,10 +71,6 @@ def validate_repo_path(repo_path: str) -> Path:
     return path
 
 
-from agent.scanner.repo_scanner import scan_repository
-import json
-
-
 def run_analysis(repo_path: Path) -> NoReturn:
     """
     Run repository analysis.
@@ -79,14 +78,20 @@ def run_analysis(repo_path: Path) -> NoReturn:
     print("[INFO] Dockerization Agent initialized")
     print(f"[INFO] Analyzing repository: {repo_path}")
 
-    metadata = scan_repository(repo_path)
+    scan_data = scan_repository(repo_path)
 
     print("[INFO] Repository scan completed")
-    print(json.dumps(metadata, indent=2))
+
+    stack_analysis = detect_python_stack(repo_path, scan_data)
+
+    print("[INFO] Stack analysis completed")
+    print(json.dumps({
+        "repository": scan_data,
+        "python_stack": stack_analysis,
+    }, indent=2))
 
     sys.exit(0)
 
-  
 def main() -> NoReturn:
     """
     Main entry point.
