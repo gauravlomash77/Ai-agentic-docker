@@ -18,6 +18,7 @@ from typing import NoReturn
 from agent.analyzer.stack_detector import detect_python_stack
 from agent.scanner.repo_scanner import scan_repository
 from agent.analyzer.framework_detector import detect_framework
+from agent.analyzer.entrypoint_resolver import resolve_entrypoint
 
 
 def parse_args() -> argparse.Namespace:
@@ -72,9 +73,6 @@ def validate_repo_path(repo_path: str) -> Path:
     return path
 
 def run_analysis(repo_path: Path) -> NoReturn:
-    """
-    Run repository analysis.
-    """
     print("[INFO] Dockerization Agent initialized")
     print(f"[INFO] Analyzing repository: {repo_path}")
 
@@ -91,11 +89,19 @@ def run_analysis(repo_path: Path) -> NoReturn:
     )
     print("[INFO] Framework analysis completed")
 
+    entrypoint = resolve_entrypoint(
+        repo_path=repo_path,
+        scan_data=scan_data,
+        framework_data=framework_analysis,
+    )
+    print("[INFO] Entrypoint resolution completed")
+
     print(json.dumps(
         {
             "repository": scan_data,
             "python_stack": stack_analysis,
             "framework": framework_analysis,
+            "entrypoint": entrypoint,
         },
         indent=2
     ))
