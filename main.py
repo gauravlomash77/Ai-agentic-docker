@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import NoReturn
 from agent.analyzer.stack_detector import detect_python_stack
 from agent.scanner.repo_scanner import scan_repository
+from agent.analyzer.framework_detector import detect_framework
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,7 +71,6 @@ def validate_repo_path(repo_path: str) -> Path:
 
     return path
 
-
 def run_analysis(repo_path: Path) -> NoReturn:
     """
     Run repository analysis.
@@ -79,16 +79,26 @@ def run_analysis(repo_path: Path) -> NoReturn:
     print(f"[INFO] Analyzing repository: {repo_path}")
 
     scan_data = scan_repository(repo_path)
-
     print("[INFO] Repository scan completed")
 
     stack_analysis = detect_python_stack(repo_path, scan_data)
+    print("[INFO] Python stack analysis completed")
 
-    print("[INFO] Stack analysis completed")
-    print(json.dumps({
-        "repository": scan_data,
-        "python_stack": stack_analysis,
-    }, indent=2))
+    framework_analysis = detect_framework(
+        repo_path=repo_path,
+        scan_data=scan_data,
+        stack_data=stack_analysis,
+    )
+    print("[INFO] Framework analysis completed")
+
+    print(json.dumps(
+        {
+            "repository": scan_data,
+            "python_stack": stack_analysis,
+            "framework": framework_analysis,
+        },
+        indent=2
+    ))
 
     sys.exit(0)
 
