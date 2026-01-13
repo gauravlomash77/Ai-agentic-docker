@@ -11,6 +11,7 @@ This module:
 - Never guesses entrypoints
 """
 
+import ast
 from pathlib import Path
 from typing import Dict, List
 
@@ -20,29 +21,52 @@ PYTHON_DEP_FILES = {
     "pyproject.toml",
 }
 
-COMMON_ENTRY_FILES = {
-    "main.py",
-    "app.py",
-    "wsgi.py",
-    "asgi.py",
-}
 
-
-def detect_python_stack(repo_path: Path, scan_data: Dict[str, object]) -> Dict[str, object]:
+def _detect_fastapi_apps(repo_path: Path, files: List[str]) -> List[Dict[str, str]]:
     """
-    Detect Python backend characteristics.
-
-    Args:
-        repo_path (Path): Repository root
-        scan_data (Dict): Output from repository scanner
+    Detect FastAPI app instantiations using AST.
 
     Returns:
-        Dict[str, object]: Python stack analysis
+        List of dicts with keys: file, variable
+    """
+    apps: List[Dict[str, str]] = []
+
+    for file in files:
+        if not file.endswith(".py"):
+            continue
+
+        path = repo_path / file
+        try:
+            tree = ast.parse(path.read_text())
+        except Exception:
+            continue
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+                func = node.value.func
+                if isinstance(func, ast.Name) and func.id == "FastAPI":
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            apps.append(
+                                {
+                                    "file": file,
+                                    "variable": target.id,
+                                }
+                            )
+    return apps
+
+
+def detect_python_stack(
+    repo_path: Path,
+    scan_data: Dict[str, object],
+) -> Dict[str, object]:
+    """
+    Detect Python backend characteristics.
     """
     files: List[str] = scan_data.get("files", [])
     extensions: Dict[str, int] = scan_data.get("file_extensions", {})
 
-    result = {
+    result: Dict[str, object] = {
         "is_python_project": False,
         "confidence": "low",
         "dependency_management": None,
@@ -51,12 +75,12 @@ def detect_python_stack(repo_path: Path, scan_data: Dict[str, object]) -> Dict[s
     }
 
     # 1. Detect Python presence
-    if ".py" in extensions:
-        result["is_python_project"] = True
-        result["confidence"] = "medium"
-    else:
+    if ".py" not in extensions:
         result["notes"].append("No Python source files detected.")
         return result
+
+    result["is_python_project"] = True
+    result["confidence"] = "medium"
 
     # 2. Detect dependency management
     for dep_file in PYTHON_DEP_FILES:
@@ -70,15 +94,19 @@ def detect_python_stack(repo_path: Path, scan_data: Dict[str, object]) -> Dict[s
             "No standard Python dependency file found (requirements.txt / pyproject.toml)."
         )
 
-    # 3. Detect entrypoint candidates (non-guessing)
-    for file in files:
-        filename = Path(file).name
-        if filename in COMMON_ENTRY_FILES:
-            result["entrypoint_candidates"].append(file)
+    # 3. Detect FastAPI app definitions (PROOF-BASED)
+    fastapi_apps = _detect_fastapi_apps(repo_path, files)
 
-    if not result["entrypoint_candidates"]:
-        result["notes"].append(
-            "No common Python entrypoint files found."
+    if fastapi_apps:
+        # Prefer apps under app/
+        sorted_apps = sorted(
+            fastapi_apps,
+            key=lambda x: (not x["file"].startswith("app/"), x["file"]),
         )
+
+        result["entrypoint_candidates"] = sorted_apps
+        result["confidence"] = "high"
+    else:
+        result["notes"].append("No FastAPI app instantiation found.")
 
     return result
