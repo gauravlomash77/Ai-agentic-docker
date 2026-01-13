@@ -68,27 +68,25 @@ def validate_repo_path(repo_path: str) -> Path:
     return path
 
 
+from agent.scanner.repo_scanner import scan_repository
+import json
+
+
 def run_analysis(repo_path: Path) -> NoReturn:
     """
     Run repository analysis.
-
-    Phase-1 behavior:
-    - Placeholder for deterministic scanning
-    - Will be replaced with real scanner module
-
-    Args:
-        repo_path (Path): Validated repository path
     """
     print("[INFO] Dockerization Agent initialized")
     print(f"[INFO] Analyzing repository: {repo_path}")
 
-    # Placeholder until scanner is implemented
-    print("[INFO] Phase-1 analysis not yet implemented")
-    print("[INFO] Next step: repository scanning and stack detection")
+    metadata = scan_repository(repo_path)
+
+    print("[INFO] Repository scan completed")
+    print(json.dumps(metadata, indent=2))
 
     sys.exit(0)
 
-
+  
 def main() -> NoReturn:
     """
     Main entry point.
