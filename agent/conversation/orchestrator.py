@@ -5,7 +5,7 @@ Conversation Orchestrator
 Controls the flow of:
 1. Repository analysis
 2. Clarification (if required)
-3. Dockerfile generation (later phase)
+3. Dockerfile generation
 
 This is the SINGLE authority for agent flow.
 """
@@ -19,6 +19,8 @@ from agent.scanner.repo_scanner import scan_repository
 from agent.analyzer.stack_detector import detect_python_stack
 from agent.analyzer.framework_detector import detect_framework
 from agent.analyzer.entrypoint_resolver import resolve_entrypoint
+from agent.generator.registry import GeneratorRegistry
+from agent.generator.types import GeneratorInput
 
 
 class ConversationOrchestrator:
@@ -141,3 +143,60 @@ class ConversationOrchestrator:
             self.state.pending_questions = []
             self.state.clarifications_required = False
             self.state.analysis_confidence = "high"
+
+    # -------------------------
+    # Step 6: Generator execution
+    # -------------------------
+
+    def run_generation(self) -> Dict[str, object]:
+        """
+        Execute Dockerfile generation using selected generator.
+        """
+        if not self.state.analysis_completed:
+            raise RuntimeError("Analysis not completed")
+
+        if self.state.analysis_confidence != "high":
+            raise RuntimeError("Generation not allowed due to low confidence")
+
+        # Mark intent (important for flow correctness)
+        self.state.generation_requested = True
+
+        input_data = GeneratorInput(
+            analyzer_output=self.state.analyzer_output or {},
+            answered_questions=self.state.answered_questions,
+        )
+
+        registry = GeneratorRegistry()
+        generator = registry.select(input_data)
+
+        if not generator:
+            self.state.generation_error = "No suitable generator found"
+            self.state.generation_completed = True
+            return {
+                "status": "refused",
+                "reason": "No suitable generator available for this project",
+            }
+
+        result = generator.generate(input_data)
+
+        self.state.generator_result = {
+            "dockerfile": result.dockerfile,
+            "confidence": result.confidence,
+            "warnings": result.warnings,
+            "refused": result.refused,
+            "refusal_reason": result.refusal_reason,
+        }
+
+        self.state.generation_completed = True
+
+        if result.refused:
+            return {
+                "status": "refused",
+                "reason": result.refusal_reason,
+            }
+
+        return {
+            "status": "generated",
+            "dockerfile": result.dockerfile,
+            "confidence": result.confidence,
+        }

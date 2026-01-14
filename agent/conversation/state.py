@@ -22,3 +22,9 @@ class ConversationState:
 
     generation_requested: bool = False
     generation_completed: bool = False
+
+    # Adding  fields to ConversationState
+
+    generator_result: Optional[Dict[str, object]] = None
+    generation_error: Optional[str] = None
+
