@@ -21,6 +21,8 @@ from agent.analyzer.framework_detector import detect_framework
 from agent.analyzer.entrypoint_resolver import resolve_entrypoint
 from agent.generator.registry import GeneratorRegistry
 from agent.generator.types import GeneratorInput
+from agent.reviewer.dockerfile_reviewer import DockerfileReviewer
+
 
 
 class ConversationOrchestrator:
@@ -150,7 +152,7 @@ class ConversationOrchestrator:
 
     def run_generation(self) -> Dict[str, object]:
         """
-        Execute Dockerfile generation using selected generator.
+        Execute Dockerfile generation and post-generation review.
         """
         if not self.state.analysis_completed:
             raise RuntimeError("Analysis not completed")
@@ -158,7 +160,6 @@ class ConversationOrchestrator:
         if self.state.analysis_confidence != "high":
             raise RuntimeError("Generation not allowed due to low confidence")
 
-        # Mark intent (important for flow correctness)
         self.state.generation_requested = True
 
         input_data = GeneratorInput(
@@ -177,6 +178,7 @@ class ConversationOrchestrator:
                 "reason": "No suitable generator available for this project",
             }
 
+        # ---------- Generation ----------
         result = generator.generate(input_data)
 
         self.state.generator_result = {
@@ -187,16 +189,30 @@ class ConversationOrchestrator:
             "refusal_reason": result.refusal_reason,
         }
 
-        self.state.generation_completed = True
-
         if result.refused:
+            self.state.generation_completed = True
             return {
                 "status": "refused",
                 "reason": result.refusal_reason,
+            }
+
+        # ---------- Review ----------
+        reviewer = DockerfileReviewer()
+        review = reviewer.review(result.dockerfile)
+
+        self.state.review_result = review
+        self.state.generation_completed = True
+
+        if not review["passed"]:
+            return {
+                "status": "refused",
+                "reason": "Dockerfile failed static review",
+                "review": review,
             }
 
         return {
             "status": "generated",
             "dockerfile": result.dockerfile,
             "confidence": result.confidence,
+            "review": review,
         }

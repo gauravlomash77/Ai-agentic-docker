@@ -11,20 +11,21 @@ class ConversationState:
     session_id: str
     repo_path: Optional[str] = None
 
+    # Analysis
     analysis_completed: bool = False
     analysis_confidence: Optional[str] = None
-
     analyzer_output: Optional[Dict[str, object]] = None
 
+    # Clarification
     clarifications_required: bool = False
-    pending_questions: List[Dict[str, object]] = field(default_factory=list) 
-    answered_questions: Dict[str, str] = field(default_factory=dict) 
+    pending_questions: List[Dict[str, object]] = field(default_factory=list)
+    answered_questions: Dict[str, str] = field(default_factory=dict)
 
+    # Generation
     generation_requested: bool = False
     generation_completed: bool = False
-
-    # Adding  fields to ConversationState
-
     generator_result: Optional[Dict[str, object]] = None
     generation_error: Optional[str] = None
 
+    # Review (NEW)
+    review_result: Optional[Dict[str, object]] = None
