@@ -1,0 +1,99 @@
+import uuid
+from typing import Dict, List
+
+from agent.conversation.state import ConversationState
+from agent.scanner.repo_scanner import scan_repository
+from agent.analyzer.stack_detector import detect_python_stack
+from agent.analyzer.framework_detector import detect_framework
+from agent.analyzer.entrypoint_resolver import resolve_entrypoint
+
+
+class ConversationOrchestrator:
+    """
+    Controls the flow of analysis, clarification, and generation.
+    This is the brain of the agent.
+    """
+
+    def __init__(self) -> None:
+        self.state = ConversationState(session_id=str(uuid.uuid4()))
+
+    # -------------------------
+    # Step 1: Input handling
+    # -------------------------
+
+    def set_repo_path(self, repo_path: str) -> None:
+        self.state.repo_path = repo_path
+
+    # -------------------------
+    # Step 2: Deterministic analysis
+    # -------------------------
+
+    def run_analysis(self) -> Dict[str, object]:
+        if not self.state.repo_path:
+            raise RuntimeError("Repository path not set")
+
+        scan_data = scan_repository(self.state.repo_path)
+        stack = detect_python_stack(self.state.repo_path, scan_data)
+        framework = detect_framework(
+            repo_path=self.state.repo_path,
+            scan_data=scan_data,
+            stack_data=stack,
+        )
+        entrypoint = resolve_entrypoint(
+            repo_path=self.state.repo_path,
+            scan_data=scan_data,
+            framework_data=framework,
+            stack_data=stack,
+        )
+
+        analyzer_output = {
+            "repository": scan_data,
+            "python_stack": stack,
+            "framework": framework,
+            "entrypoint": entrypoint,
+        }
+
+        self.state.analyzer_output = analyzer_output
+        self.state.analysis_completed = True
+
+        confidences = [
+            stack.get("confidence"),
+            framework.get("confidence"),
+            entrypoint.get("confidence"),
+        ]
+        self.state.analysis_confidence = self._lowest_confidence(confidences)
+
+        return analyzer_output
+
+    # -------------------------
+    # Step 3: Confidence helper
+    # -------------------------
+
+    def _lowest_confidence(self, values: List[str]) -> str:
+        """
+        Determine the lowest confidence level.
+        This is a PRIVATE helper.
+        """
+        order = {"low": 0, "medium": 1, "high": 2}
+        return min(values, key=lambda v: order.get(v, 0))
+
+    # -------------------------
+    # Step 4: Flow decision
+    # -------------------------
+
+    def evaluate_next_action(self) -> str:
+        """
+        Decide what the agent should do next.
+        This is the SINGLE flow authority.
+        """
+        if not self.state.analysis_completed:
+            return "NEEDS_ANALYSIS"
+
+        if self.state.analysis_confidence != "high":
+            self.state.clarifications_required = True
+            return "NEEDS_CLARIFICATION"
+
+        if not self.state.generation_requested:
+            return "READY_FOR_GENERATION"
+
+        return "DONE"
